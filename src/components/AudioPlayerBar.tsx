@@ -10,6 +10,7 @@ import {
   Gauge,
   Sliders,
   FileAudio,
+  Share2,
 } from 'lucide-react';
 import { formatTime, toPersianDigits } from '../utils/persianUtils';
 
@@ -29,6 +30,7 @@ interface AudioPlayerBarProps {
   onPitchChange: (pitch: number) => void;
   onToggleLoop: () => void;
   onDownload: (format: 'mp3' | 'wav') => void;
+  onShare?: (format: 'mp3' | 'wav') => void;
   voiceName: string;
 }
 
@@ -48,6 +50,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   onPitchChange,
   onToggleLoop,
   onDownload,
+  onShare,
   voiceName,
 }) => {
   const [selectedFormat, setSelectedFormat] = useState<'mp3' | 'wav'>('mp3');
@@ -69,7 +72,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
               </span>
             </h4>
             <p className="text-xs text-slate-400">
-              کیفیت بالا با قابلیت دانلود در دو فرمت محبوب MP3 و WAV
+              کیفیت بالا با قابلیت دانلود مستقیم در دو فرمت محبوب MP3 و WAV
             </p>
           </div>
         </div>
@@ -104,15 +107,28 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
             </button>
           </div>
 
-          {/* Download Button */}
+          {/* Direct File Download Button (Directly saves to Downloads folder) */}
           <button
             type="button"
             onClick={() => onDownload(selectedFormat)}
+            title="دانلود و ذخیره مستقیم در پوشه دانلودها"
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:brightness-105 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md hover:shadow-amber-500/20 active:scale-95 cursor-pointer"
           >
             <Download className="w-4 h-4" />
-            <span>دانلود {selectedFormat.toUpperCase()}</span>
+            <span>دانلود مستقیم {selectedFormat.toUpperCase()}</span>
           </button>
+
+          {/* Optional Share Button */}
+          {onShare && (
+            <button
+              type="button"
+              onClick={() => onShare(selectedFormat)}
+              title="اشتراک‌گذاری در واتساپ، تلگرام یا برنامه‌ها"
+              className="p-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-amber-300 border border-slate-700 transition-colors cursor-pointer"
+            >
+              <Share2 className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
 

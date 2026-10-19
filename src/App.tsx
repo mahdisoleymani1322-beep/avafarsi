@@ -243,7 +243,7 @@ export default function App() {
     }
   };
 
-  // Helper: Download audio file with MP3 or WAV conversion and multi-layer mobile support
+  // Helper: Direct file download directly into the device's Downloads folder
   const triggerDownload = async (
     base64Data: string,
     filenamePrefix = 'AvaFarsi_speech',
@@ -252,7 +252,6 @@ export default function App() {
     try {
       const isMp3 = format === 'mp3';
       const ext = isMp3 ? 'mp3' : 'wav';
-      const mime = isMp3 ? 'audio/mpeg' : 'audio/wav';
       const filename = `${filenamePrefix}_${Date.now()}.${ext}`;
 
       let targetBlob: Blob;
@@ -271,38 +270,20 @@ export default function App() {
         targetBlob = new Blob([byteArray], { type: 'audio/wav' });
       }
 
-      // 1. Try Web Share API (native share sheet on iPhone/Android to Save to Files or WhatsApp/Telegram)
-      if (typeof navigator !== 'undefined' && 'canShare' in navigator) {
-        try {
-          const file = new File([targetBlob], filename, { type: mime });
-          if (navigator.canShare({ files: [file] })) {
-            await navigator.share({
-              files: [file],
-              title: `فایل صوتی آوا فارسی (${format.toUpperCase()})`,
-              text: 'فایل صوتی تولید شده با هوش مصنوعی آوا فارسی',
-            });
-            return;
-          }
-        } catch (shareErr: any) {
-          if (shareErr.name !== 'AbortError') {
-            console.log('Web share note:', shareErr);
-          }
-        }
-      }
-
-      // 2. Blob URL with delayed revoke (prevents mobile download manager cancellation)
+      // Direct file download - directly saves to device Downloads folder without opening share dialog
       const url = URL.createObjectURL(targetBlob);
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+      link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+
+      // Keep URL active for 60 seconds so mobile/desktop download manager finishes
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
-      console.error('Download error, falling back to server download:', err);
+      console.error('Client download error, falling back to server download:', err);
       try {
         const res = await fetch('/api/download-audio', {
           method: 'POST',
@@ -318,12 +299,55 @@ export default function App() {
         const serverLink = document.createElement('a');
         serverLink.href = serverUrl;
         serverLink.download = `${filenamePrefix}.${format}`;
+        serverLink.style.display = 'none';
         document.body.appendChild(serverLink);
         serverLink.click();
         document.body.removeChild(serverLink);
         setTimeout(() => URL.revokeObjectURL(serverUrl), 60000);
       } catch (fallbackErr) {
         console.error('Server download error:', fallbackErr);
+      }
+    }
+  };
+
+  // Optional Share helper for explicitly sharing to apps
+  const triggerShare = async (
+    base64Data: string,
+    filenamePrefix = 'AvaFarsi_speech',
+    format: 'mp3' | 'wav' = 'mp3'
+  ) => {
+    try {
+      const isMp3 = format === 'mp3';
+      const ext = isMp3 ? 'mp3' : 'wav';
+      const mime = isMp3 ? 'audio/mpeg' : 'audio/wav';
+      const filename = `${filenamePrefix}_${Date.now()}.${ext}`;
+
+      let targetBlob: Blob;
+      if (isMp3) {
+        const converted = await convertWavToMp3Blob(base64Data, 128);
+        targetBlob = converted.blob;
+      } else {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        targetBlob = new Blob([new Uint8Array(byteNumbers)], { type: 'audio/wav' });
+      }
+
+      if (typeof navigator !== 'undefined' && 'share' in navigator) {
+        const file = new File([targetBlob], filename, { type: mime });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: `فایل صوتی آوا فارسی (${format.toUpperCase()})`,
+            text: 'فایل صوتی تولید شده با هوش مصنوعی آوا فارسی',
+          });
+        }
+      }
+    } catch (e: any) {
+      if (e.name !== 'AbortError') {
+        console.log('Share dismissed or not supported:', e);
       }
     }
   };
@@ -716,6 +740,7 @@ export default function App() {
             onPitchChange={handlePitchChange}
             onToggleLoop={handleToggleLoop}
             onDownload={(format) => triggerDownload(audioBase64, `AvaFarsi_${selectedVoice}`, format)}
+            onShare={(format) => triggerShare(audioBase64, `AvaFarsi_${selectedVoice}`, format)}
             voiceName={selectedVoiceMeta?.persianName || selectedVoice}
           />
         ) : (
