@@ -10,7 +10,7 @@ interface HistoryDrawerProps {
   onSelectAndPlay: (item: HistoryItem) => void;
   onDeleteItem: (id: string) => void;
   onClearAll: () => void;
-  onDownloadItem: (item: HistoryItem) => void;
+  onDownloadItem: (item: HistoryItem, format: 'mp3' | 'wav') => void;
 }
 
 export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
@@ -112,14 +112,27 @@ export const HistoryDrawer: React.FC<HistoryDrawerProps> = ({
                     <span>پخش گفتار</span>
                   </button>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => onDownloadItem(item)}
-                      title="دانلود WAV"
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
-                    >
-                      <Download className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center gap-1.5">
+                    {item.audioBase64 && (
+                      <>
+                        <button
+                          onClick={() => onDownloadItem(item, 'mp3')}
+                          title="دانلود با فرمت MP3 (کم‌حجم)"
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold text-amber-300 hover:text-amber-200 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>MP3</span>
+                        </button>
+                        <button
+                          onClick={() => onDownloadItem(item, 'wav')}
+                          title="دانلود با فرمت اصلی WAV"
+                          className="px-2 py-1 rounded-lg text-[10px] font-bold text-slate-300 hover:text-slate-100 bg-slate-800 hover:bg-slate-750 border border-slate-700 transition-colors cursor-pointer flex items-center gap-1"
+                        >
+                          <Download className="w-3 h-3" />
+                          <span>WAV</span>
+                        </button>
+                      </>
+                    )}
                     <button
                       onClick={() => onDeleteItem(item.id)}
                       title="حذف از تاریخچه"

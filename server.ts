@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { GoogleGenAI } from '@google/genai';
+import { Mp3Encoder } from '@breezystack/lamejs';
 
 dotenv.config();
 
@@ -43,6 +44,43 @@ const TONE_STYLE_MAP: Record<string, string> = {
 
 const VALID_VOICES = ['Kore', 'Puck', 'Charon', 'Fenrir', 'Zephyr'] as const;
 type VoiceName = typeof VALID_VOICES[number];
+
+// Helper to convert WAV buffer to MP3
+function encodeWavBufferToMp3(wavBuffer: Buffer, kbps = 128): Buffer {
+  let channels = 1;
+  let sampleRate = 24000;
+  let pcmOffset = 44;
+
+  if (wavBuffer.length > 44 && wavBuffer.toString('ascii', 0, 4) === 'RIFF') {
+    channels = wavBuffer.readUInt16LE(22) || 1;
+    sampleRate = wavBuffer.readUInt32LE(24) || 24000;
+    for (let i = 12; i < wavBuffer.length - 8; i++) {
+      if (wavBuffer.toString('ascii', i, i + 4) === 'data') {
+        pcmOffset = i + 8;
+        break;
+      }
+    }
+  }
+
+  const pcmBytesLength = wavBuffer.length - pcmOffset;
+  const sampleCount = Math.floor(pcmBytesLength / 2);
+  const samples = new Int16Array(sampleCount);
+  for (let i = 0; i < sampleCount; i++) {
+    samples[i] = wavBuffer.readInt16LE(pcmOffset + i * 2);
+  }
+
+  const encoder = new Mp3Encoder(channels, sampleRate, kbps);
+  const mp3Chunks: Buffer[] = [];
+  const blockSize = 1152;
+  for (let i = 0; i < samples.length; i += blockSize) {
+    const chunk = samples.subarray(i, i + blockSize);
+    const buf = encoder.encodeBuffer(chunk);
+    if (buf.length > 0) mp3Chunks.push(Buffer.from(buf));
+  }
+  const flushBuf = encoder.flush();
+  if (flushBuf.length > 0) mp3Chunks.push(Buffer.from(flushBuf));
+  return Buffer.concat(mp3Chunks);
+}
 
 // Health check endpoint
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -128,23 +166,34 @@ app.post('/api/tts', async (req: Request, res: Response) => {
   }
 });
 
-// Direct file download endpoint (works reliably across all mobile browsers and iOS Safari)
+// Direct file download endpoint supporting both MP3 and WAV
 app.post('/api/download-audio', (req: Request, res: Response) => {
   try {
-    const { audioBase64, filename = 'AvaFarsi_speech.wav' } = req.body;
+    const { audioBase64, filename = 'AvaFarsi_speech', format = 'mp3' } = req.body;
     if (!audioBase64 || typeof audioBase64 !== 'string') {
       return res.status(400).send('اطلاعات صوتی نامعتبر است.');
     }
-    const buffer = Buffer.from(audioBase64, 'base64');
-    const safeFilename = filename.endsWith('.wav') ? filename : `${filename}.wav`;
+    const wavBuffer = Buffer.from(audioBase64, 'base64');
+    const baseName = filename.replace(/\.(wav|mp3)$/i, '');
 
-    res.setHeader('Content-Type', 'audio/wav');
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
-    res.setHeader('Content-Length', buffer.length.toString());
-    return res.send(buffer);
+    if (format === 'wav') {
+      const safeFilename = `${baseName}.wav`;
+      res.setHeader('Content-Type', 'audio/wav');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+      res.setHeader('Content-Length', wavBuffer.length.toString());
+      return res.send(wavBuffer);
+    } else {
+      // Default to MP3
+      const mp3Buffer = encodeWavBufferToMp3(wavBuffer, 128);
+      const safeFilename = `${baseName}.mp3`;
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+      res.setHeader('Content-Length', mp3Buffer.length.toString());
+      return res.send(mp3Buffer);
+    }
   } catch (err: any) {
     console.error('Download error:', err);
-    return res.status(500).send('خطا در دانلود فایل');
+    return res.status(500).send('خطا در دانلود فایل صوتی');
   }
 });
 

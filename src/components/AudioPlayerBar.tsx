@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Play,
   Pause,
@@ -9,6 +9,7 @@ import {
   Repeat,
   Gauge,
   Sliders,
+  FileAudio,
 } from 'lucide-react';
 import { formatTime, toPersianDigits } from '../utils/persianUtils';
 
@@ -27,7 +28,7 @@ interface AudioPlayerBarProps {
   onSpeedChange: (speed: number) => void;
   onPitchChange: (pitch: number) => void;
   onToggleLoop: () => void;
-  onDownload: () => void;
+  onDownload: (format: 'mp3' | 'wav') => void;
   voiceName: string;
 }
 
@@ -49,6 +50,7 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
   onDownload,
   voiceName,
 }) => {
+  const [selectedFormat, setSelectedFormat] = useState<'mp3' | 'wav'>('mp3');
   const speeds = [0.75, 1.0, 1.25, 1.5, 2.0];
 
   return (
@@ -66,18 +68,52 @@ export const AudioPlayerBar: React.FC<AudioPlayerBarProps> = ({
                 گوینده: {voiceName}
               </span>
             </h4>
-            <p className="text-xs text-slate-400">فرمت باکیفیت 24kHz WAV مونو</p>
+            <p className="text-xs text-slate-400">
+              کیفیت بالا با قابلیت دانلود در دو فرمت محبوب MP3 و WAV
+            </p>
           </div>
         </div>
 
-        {/* Download Button */}
-        <button
-          onClick={onDownload}
-          className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-medium text-xs rounded-xl transition-all shadow-md hover:shadow-amber-500/20 active:scale-95 cursor-pointer"
-        >
-          <Download className="w-4 h-4" />
-          <span>دانلود فایل صوتی (WAV)</span>
-        </button>
+        {/* Download Group with Format Switcher */}
+        <div className="flex items-center gap-2">
+          {/* Format Selector Pill */}
+          <div className="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => setSelectedFormat('mp3')}
+              className={`px-3 py-1 rounded-lg transition-all cursor-pointer font-bold flex items-center gap-1 ${
+                selectedFormat === 'mp3'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="فرمت استاندارد MP3 (کم‌حجم و مناسب گوشی، تلگرام و پیام‌رسان‌ها)"
+            >
+              <span>MP3</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedFormat('wav')}
+              className={`px-3 py-1 rounded-lg transition-all cursor-pointer font-bold flex items-center gap-1 ${
+                selectedFormat === 'wav'
+                  ? 'bg-amber-500 text-slate-950 shadow-xs'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="فرمت اصلی استودیویی WAV (بدون فشرده‌سازی)"
+            >
+              <span>WAV</span>
+            </button>
+          </div>
+
+          {/* Download Button */}
+          <button
+            type="button"
+            onClick={() => onDownload(selectedFormat)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-400 hover:brightness-105 text-slate-950 font-bold text-xs rounded-xl transition-all shadow-md hover:shadow-amber-500/20 active:scale-95 cursor-pointer"
+          >
+            <Download className="w-4 h-4" />
+            <span>دانلود {selectedFormat.toUpperCase()}</span>
+          </button>
+        </div>
       </div>
 
       {/* Scrubber / Progress timeline */}

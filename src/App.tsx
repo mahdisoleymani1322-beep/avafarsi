@@ -17,6 +17,7 @@ import { VoiceSelector } from './components/VoiceSelector';
 import { DiacriticsToolbar } from './components/DiacriticsToolbar';
 import { HistoryDrawer } from './components/HistoryDrawer';
 import { InstallMobileModal } from './components/InstallMobileModal';
+import { convertWavToMp3Blob } from './utils/audioConverter';
 import {
   Volume2,
   Clock,
@@ -242,32 +243,47 @@ export default function App() {
     }
   };
 
-  // Helper: Download Base64 as WAV file with multi-layer mobile support
-  const triggerDownload = async (base64Data: string, filenamePrefix = 'AvaFarsi_speech') => {
+  // Helper: Download audio file with MP3 or WAV conversion and multi-layer mobile support
+  const triggerDownload = async (
+    base64Data: string,
+    filenamePrefix = 'AvaFarsi_speech',
+    format: 'mp3' | 'wav' = 'mp3'
+  ) => {
     try {
-      const filename = `${filenamePrefix}_${Date.now()}.wav`;
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: 'audio/wav' });
+      const isMp3 = format === 'mp3';
+      const ext = isMp3 ? 'mp3' : 'wav';
+      const mime = isMp3 ? 'audio/mpeg' : 'audio/wav';
+      const filename = `${filenamePrefix}_${Date.now()}.${ext}`;
 
-      // 1. Try Web Share API (native sheet on iPhone/Android to Save to Files or WhatsApp/Telegram)
+      let targetBlob: Blob;
+
+      if (isMp3) {
+        // High quality fast client-side MP3 encoding (128kbps)
+        const converted = await convertWavToMp3Blob(base64Data, 128);
+        targetBlob = converted.blob;
+      } else {
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        targetBlob = new Blob([byteArray], { type: 'audio/wav' });
+      }
+
+      // 1. Try Web Share API (native share sheet on iPhone/Android to Save to Files or WhatsApp/Telegram)
       if (typeof navigator !== 'undefined' && 'canShare' in navigator) {
         try {
-          const file = new File([blob], filename, { type: 'audio/wav' });
+          const file = new File([targetBlob], filename, { type: mime });
           if (navigator.canShare({ files: [file] })) {
             await navigator.share({
               files: [file],
-              title: 'فایل صوتی آوا فارسی',
+              title: `فایل صوتی آوا فارسی (${format.toUpperCase()})`,
               text: 'فایل صوتی تولید شده با هوش مصنوعی آوا فارسی',
             });
             return;
           }
         } catch (shareErr: any) {
-          // If user cancels share sheet or if share was aborted, fall through to browser download
           if (shareErr.name !== 'AbortError') {
             console.log('Web share note:', shareErr);
           }
@@ -275,7 +291,7 @@ export default function App() {
       }
 
       // 2. Blob URL with delayed revoke (prevents mobile download manager cancellation)
-      const url = URL.createObjectURL(blob);
+      const url = URL.createObjectURL(targetBlob);
       const link = document.createElement('a');
       link.href = url;
       link.download = filename;
@@ -291,13 +307,17 @@ export default function App() {
         const res = await fetch('/api/download-audio', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audioBase64: base64Data, filename: `${filenamePrefix}.wav` }),
+          body: JSON.stringify({
+            audioBase64: base64Data,
+            filename: filenamePrefix,
+            format,
+          }),
         });
         const serverBlob = await res.blob();
         const serverUrl = URL.createObjectURL(serverBlob);
         const serverLink = document.createElement('a');
         serverLink.href = serverUrl;
-        serverLink.download = `${filenamePrefix}.wav`;
+        serverLink.download = `${filenamePrefix}.${format}`;
         document.body.appendChild(serverLink);
         serverLink.click();
         document.body.removeChild(serverLink);
@@ -695,7 +715,7 @@ export default function App() {
             onSpeedChange={handleSpeedChange}
             onPitchChange={handlePitchChange}
             onToggleLoop={handleToggleLoop}
-            onDownload={() => triggerDownload(audioBase64, `AvaFarsi_${selectedVoice}`)}
+            onDownload={(format) => triggerDownload(audioBase64, `AvaFarsi_${selectedVoice}`, format)}
             voiceName={selectedVoiceMeta?.persianName || selectedVoice}
           />
         ) : (
@@ -719,7 +739,7 @@ export default function App() {
         onSelectAndPlay={handlePlayFromHistory}
         onDeleteItem={handleDeleteHistoryItem}
         onClearAll={handleClearAllHistory}
-        onDownloadItem={(item) => triggerDownload(item.audioBase64, `AvaFarsi_${item.voice}`)}
+        onDownloadItem={(item, format) => triggerDownload(item.audioBase64, `AvaFarsi_${item.voice}`, format)}
       />
 
       {/* Install Mobile & QR Modal */}
